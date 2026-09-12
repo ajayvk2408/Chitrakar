@@ -1,0 +1,465 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chitrakar -- AI Image Generator</title>
+<style>
+  :root{
+    --bg: #171410;
+    --panel: #211d17;
+    --panel-2: #2a251c;
+    --ink: #f2ead9;
+    --muted: #a89a7d;
+    --pulp: #e8b13a;
+    --pulp-deep: #b9791f;
+    --line: #3a3327;
+    --radius: 4px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at top left, #221d15 0%, var(--bg) 55%);
+    color:var(--ink);
+    font-family: 'Georgia', 'Iowan Old Style', serif;
+    min-height:100vh;
+  }
+  .wrap{
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 18px 60px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+    margin-bottom: 22px;
+  }
+  header h1{
+    font-size: 1.5rem;
+    margin:0;
+    font-weight:600;
+    letter-spacing: 0.2px;
+  }
+  header h1 span{
+    color: var(--pulp);
+    font-style: italic;
+  }
+  header p{
+    margin:0;
+    font-size:0.75rem;
+    color: var(--muted);
+    font-family: -apple-system, sans-serif;
+  }
+
+  .prompt-box{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  textarea{
+    width:100%;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 1rem;
+    line-height:1.5;
+    resize: vertical;
+    min-height: 64px;
+    outline: none;
+  }
+  textarea::placeholder{ color: #6b604a; }
+
+  .controls{
+    display:flex;
+    gap:10px;
+    margin-top:12px;
+    flex-wrap: wrap;
+    align-items:center;
+    font-family: -apple-system, sans-serif;
+  }
+  select{
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+  .spacer{flex:1;}
+  button.generate{
+    background: var(--pulp);
+    color: #241a06;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    font-family: -apple-system, sans-serif;
+    cursor:pointer;
+    letter-spacing:0.2px;
+    transition: transform 0.08s ease, background 0.15s ease;
+  }
+  button.generate:hover{ background:#f0bd4e; }
+  button.generate:active{ transform: scale(0.97); }
+  button.generate:disabled{ background:#6b6046; cursor:default; }
+
+  .stage{
+    margin-top: 22px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    min-height: 320px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .stage img{
+    width:100%;
+    display:block;
+  }
+  .grid{
+    display:grid;
+    width:100%;
+    gap: 3px;
+  }
+  .grid.cols-1{ grid-template-columns: 1fr; }
+  .grid.cols-2{ grid-template-columns: 1fr 1fr; }
+  .grid.cols-4{ grid-template-columns: 1fr 1fr; }
+  .grid.cols-6{ grid-template-columns: 1fr 1fr; }
+  .grid .cell{
+    position:relative;
+    width:100%;
+    overflow:hidden;
+    background: var(--panel-2);
+    cursor:pointer;
+  }
+  .grid .cell img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .grid .cell .cell-loading{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color: var(--muted);
+    font-family: -apple-system, sans-serif;
+    font-size:0.7rem;
+  }
+  .empty-state{
+    text-align:center;
+    color: var(--muted);
+    font-family: -apple-system, sans-serif;
+    font-size: 0.85rem;
+    padding: 40px 20px;
+    max-width: 320px;
+  }
+  .empty-state .glyph{
+    font-size: 2rem;
+    display:block;
+    margin-bottom: 10px;
+    opacity:0.5;
+  }
+
+  .loading{
+    text-align:center;
+    font-family: -apple-system, sans-serif;
+    color: var(--pulp);
+    font-size: 0.85rem;
+  }
+  .loading .bar{
+    width: 140px;
+    height: 2px;
+    background: var(--line);
+    margin: 10px auto 0;
+    overflow:hidden;
+    border-radius: 2px;
+  }
+  .loading .bar span{
+    display:block;
+    width: 40%;
+    height:100%;
+    background: var(--pulp);
+    animation: slide 1.1s ease-in-out infinite;
+  }
+  @keyframes slide{
+    0%{ transform: translateX(-100%); }
+    100%{ transform: translateX(350%); }
+  }
+
+  .history{
+    margin-top: 22px;
+  }
+  .history h2{
+    font-size: 0.7rem;
+    text-transform: none;
+    color: var(--muted);
+    font-family: -apple-system, sans-serif;
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .thumbs{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .thumbs img{
+    width:100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    cursor:pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
+  }
+  .thumbs img:hover{ opacity:1; }
+
+  .actions{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    font-family: -apple-system, sans-serif;
+  }
+  .actions a, .actions button{
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 7px 12px;
+    font-size: 0.78rem;
+    text-decoration:none;
+    cursor:pointer;
+  }
+  .actions a:hover, .actions button:hover{ border-color: var(--pulp); }
+
+  footer{
+    margin-top: 34px;
+    font-family: -apple-system, sans-serif;
+    font-size: 0.68rem;
+    color: #5c5238;
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Chitra<span>kar</span></h1>
+      <p>free · no signup</p>
+    </header>
+
+    <div class="prompt-box">
+      <textarea id="prompt" placeholder="Jo dikhna chahiye woh likho... e.g. a lone banana floating in space, oil painting"></textarea>
+      <div class="controls">
+        <select id="ratio">
+          <option value="1024x1024">Square 1:1</option>
+          <option value="1024x1280">Portrait 4:5</option>
+          <option value="1280x1024">Landscape 5:4</option>
+          <option value="1024x1366">Portrait 3:4</option>
+          <option value="1366x1024">Landscape 4:3</option>
+          <option value="1024x1820">Portrait 9:16</option>
+          <option value="1820x1024">Landscape 16:9</option>
+          <option value="1024x1638">Portrait 2:3</option>
+          <option value="1638x1024">Landscape 3:2</option>
+          <option value="1024x2276">Portrait 9:20</option>
+          <option value="1200x1024">Landscape 21:9-ish</option>
+        </select>
+        <select id="style">
+          <option value="">No style</option>
+          <option value="photorealistic, 8k, detailed">Realistic</option>
+          <option value="anime style, vibrant">Anime</option>
+          <option value="oil painting, textured brushstrokes">Painting</option>
+          <option value="minimalist flat vector art">Flat vector</option>
+          <option value="digital fantasy brush painting artwork, concept art, detailed brushwork, dramatic lighting">Fantasy brush art</option>
+        </select>
+        <select id="count">
+          <option value="1">1 image</option>
+          <option value="2">2 images</option>
+          <option value="4">4 images</option>
+          <option value="6">6 images</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="generate" id="genBtn">Generate</button>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="empty-state">
+        <span class="glyph">◐</span>
+        Prompt likho aur Generate dabao -- pehli image yahan dikhegi.
+      </div>
+    </div>
+
+    <div class="actions" id="actions" style="display:none;">
+      <a id="downloadLink" download="chitrakar.png">Download</a>
+      <button id="regenBtn">Regenerate</button>
+    </div>
+
+    <div class="history" id="historySection" style="display:none;">
+      <h2>Pehle ki images</h2>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <footer>Powered by Pollinations.ai -- free image generation API</footer>
+  </div>
+
+<script>
+  const promptEl = document.getElementById('prompt');
+  const ratioEl = document.getElementById('ratio');
+  const styleEl = document.getElementById('style');
+  const countEl = document.getElementById('count');
+  const genBtn = document.getElementById('genBtn');
+  const regenBtn = document.getElementById('regenBtn');
+  const stage = document.getElementById('stage');
+  const actions = document.getElementById('actions');
+  const downloadLink = document.getElementById('downloadLink');
+  const historySection = document.getElementById('historySection');
+  const thumbs = document.getElementById('thumbs');
+
+  let history = [];
+
+  function buildUrl(prompt, width, height){
+    const seed = Math.floor(Math.random() * 1000000);
+    const encoded = encodeURIComponent(prompt);
+    return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+  }
+
+  function setLoading(){
+    stage.innerHTML = `
+      <div class="loading">
+        Image ban rahi hai...
+        <div class="bar"><span></span></div>
+      </div>`;
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating...';
+  }
+
+  function setImage(url){
+    stage.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = 'Generated image';
+    stage.appendChild(img);
+    genBtn.disabled = false;
+    genBtn.textContent = 'Generate';
+    actions.style.display = 'flex';
+    downloadLink.href = url;
+
+    history.unshift(url);
+    if(history.length > 8) history.pop();
+    renderHistory();
+  }
+
+  function setError(){
+    stage.innerHTML = `<div class="empty-state">Kuch gadbad ho gayi. Dobara try karo.</div>`;
+    genBtn.disabled = false;
+    genBtn.textContent = 'Generate';
+  }
+
+  function renderHistory(){
+    if(history.length === 0){
+      historySection.style.display = 'none';
+      return;
+    }
+    historySection.style.display = 'block';
+    thumbs.innerHTML = '';
+    history.forEach(url => {
+      const t = document.createElement('img');
+      t.src = url;
+      t.addEventListener('click', () => setImage(url));
+      thumbs.appendChild(t);
+    });
+  }
+
+  function setGridLoading(n){
+    actions.style.display = 'none';
+    const grid = document.createElement('div');
+    grid.className = `grid cols-${n}`;
+    for(let i = 0; i < n; i++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.innerHTML = `<div class="cell-loading">...</div>`;
+      grid.appendChild(cell);
+    }
+    stage.innerHTML = '';
+    stage.appendChild(grid);
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating...';
+    return grid;
+  }
+
+  function generate(){
+    const raw = promptEl.value.trim();
+    if(!raw){
+      promptEl.focus();
+      promptEl.placeholder = 'Pehle kuch likho...';
+      return;
+    }
+    const styleSuffix = styleEl.value ? `, ${styleEl.value}` : '';
+    const fullPrompt = raw + styleSuffix;
+    const [w, h] = ratioEl.value.split('x').map(Number);
+    const count = parseInt(countEl.value, 10);
+
+    if(count === 1){
+      setLoading();
+      const url = buildUrl(fullPrompt, w, h);
+      const img = new Image();
+      img.onload = () => setImage(url);
+      img.onerror = () => setError();
+      img.src = url;
+      return;
+    }
+
+    const grid = setGridLoading(count);
+    const cells = grid.querySelectorAll('.cell');
+    let doneCount = 0;
+    cells.forEach(cell => {
+      const url = buildUrl(fullPrompt, w, h);
+      const img = new Image();
+      img.onload = () => {
+        cell.innerHTML = '';
+        const el = document.createElement('img');
+        el.src = url;
+        el.alt = 'Generated image';
+        cell.appendChild(el);
+        cell.addEventListener('click', () => setImage(url));
+        doneCount++;
+        if(doneCount === cells.length){
+          genBtn.disabled = false;
+          genBtn.textContent = 'Generate';
+        }
+      };
+      img.onerror = () => {
+        cell.innerHTML = `<div class="cell-loading">Error</div>`;
+        doneCount++;
+        if(doneCount === cells.length){
+          genBtn.disabled = false;
+          genBtn.textContent = 'Generate';
+        }
+      };
+      img.src = url;
+    });
+  }
+
+  genBtn.addEventListener('click', generate);
+  regenBtn.addEventListener('click', generate);
+  promptEl.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){
+      generate();
+    }
+  });
+</script>
+</body>
+</html>
